@@ -2,7 +2,7 @@ package proto
 
 import (
 	"fmt"
-	"github.com/inconshreveable/muxado/proto/frame"
+	"github.com/shenshouer/muxado/proto/frame"
 	"io"
 	"io/ioutil"
 	"testing"

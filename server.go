@@ -2,11 +2,10 @@ package muxado
 
 import (
 	"crypto/tls"
-	"github.com/inconshreveable/muxado/proto"
-	"github.com/inconshreveable/muxado/proto/ext"
+	"github.com/shenshouer/muxado/proto"
+	"github.com/shenshouer/muxado/proto/ext"
 	"net"
 )
-
 
 // A Listener accepts new connections from its net.Listener
 // and begins muxado server connections on them.

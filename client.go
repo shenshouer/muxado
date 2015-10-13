@@ -2,8 +2,8 @@ package muxado
 
 import (
 	"crypto/tls"
-	"github.com/inconshreveable/muxado/proto"
-	"github.com/inconshreveable/muxado/proto/ext"
+	"github.com/shenshouer/muxado/proto"
+	"github.com/shenshouer/muxado/proto/ext"
 	"net"
 )
 
