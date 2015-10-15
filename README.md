@@ -10,6 +10,8 @@
 muxado是一个用go语言基于net.Conn之上实现的流复用库。muxado的协议在本文档中不是很明确，但跟在框架层移除了所有http明细字节的HTTP2协议实现非常相似。深度借鉴HTTP2, SPDY, 与WebMUX。
 
 ## muxado是怎么工作的?
+简单，muxado块数据通过每一个复用流发送并且通过传输流将块数据作为"frame"进行传播。
+
 Simplifying, muxado chunks data sent over each multiplexed stream and transmits each piece
 as a "frame" over the transport stream. It then sends these frames,
 often interleaving data for multiple streams, to the remote side.
@@ -98,6 +100,134 @@ muxado sessions and streams implement the net.Listener and net.Conn interfaces (
 		    handleResponse(buf)
 	    }(str)
     }
+## 一个完整的例子
+server.go:
+<pre>
+package main
+import (
+	"github.com/shenshouer/muxado"
+	"log"
+	"bytes"
+)
+
+func main(){
+	log.SetFlags(log.Flags()|log.Lshortfile)
+
+
+	log.Println("tcp localhost:1234")
+	l, err := muxado.Listen("tcp", ":1234")
+	if err != nil{
+		panic(err)
+	}
+
+	for{
+		sess, err := l.Accept()
+		log.Println("接收到一个客户端sesstion", sess.LocalAddr().String(), sess.RemoteAddr().String())
+		if err != nil{
+			log.Println("[ERROR] ", err)
+		}
+
+		go handleSession(sess)
+	}
+}
+
+func handleSession(sess muxado.Session){
+	defer func(){
+		if err := recover(); err != nil{
+			log.Println("[ERROR]", err)
+		}
+	}()
+
+	log.Println("开始轮训session中的stream")
+	for{
+		stream, err := sess.Accept()
+		defer stream.Close()
+		if err != nil{
+			log.Println("[ERROR]", err)
+			break
+		}
+
+		log.Println("接收到一个stream", stream.Id(), stream.LocalAddr().String(), stream.RemoteAddr().String())
+		go func() {
+			var buf bytes.Buffer
+			for{
+				if _, err := buf.ReadFrom(stream); err != nil{
+					log.Println("[ERROR]", err)
+					break
+				}else{
+					stream.HalfClose(buf.Bytes())
+				}
+			}
+		}()
+	}
+}
+</pre>
+client.go
+<pre>
+package main
+import (
+	"github.com/shenshouer/muxado"
+//	"io/ioutil"
+	"log"
+	"fmt"
+	"time"
+	"bytes"
+)
+
+func main() {
+	log.SetFlags(log.Flags()|log.Lshortfile)
+
+	log.Println("连接服务器. tcp localhost:1234")
+	sess, err := muxado.Dial("tcp", "localhost:1234")
+	if err != nil {
+		panic(err)
+	}
+
+	go func() {
+		if stream, err := sess.Open(); err != nil{
+			log.Println("[ERROR]", err)
+		}else {
+			stream.HalfClose([]byte("1111111111111111"))
+			go func() {
+				var buf bytes.Buffer
+				for{
+					<- time.After(2* time.Second)
+					if _, err := buf.ReadFrom(stream); err != nil{
+						log.Println("[ERROR]", err)
+						break
+					}else{
+						fmt.Println("通道1",string(buf.String()))
+						stream.HalfClose(buf.Bytes())
+					}
+				}
+			}()
+		}
+	}()
+
+
+	fmt.Println("开启第二个流")
+	if stream2,err := sess.Open(); err != nil{
+		log.Println("[ERROR]", err)
+	}else{
+		stream2.HalfClose([]byte("2222222222222222222"))
+		go func() {
+			var buf bytes.Buffer
+			for{
+				<- time.After(4 * time.Second)
+				if _, err := buf.ReadFrom(stream2); err != nil{
+					log.Println("[ERROR]", err)
+					break
+				}else{
+					fmt.Println("通道2",string(buf.String()))
+					stream2.HalfClose(buf.Bytes())
+				}
+			}
+		}()
+	}
+
+	<- time.After(60 * time.Second)
+}
+</pre>
 
 ## 怎么编译?
 muxado is a modified implementation of the HTTP2 framing protocol with all of the HTTP-specific bits removed. It aims
